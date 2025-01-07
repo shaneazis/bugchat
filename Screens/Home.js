@@ -7,11 +7,11 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  Alert,
   Image,
+  ActivityIndicator,
 } from 'react-native';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
-import { collection, getDocs, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDoc, doc } from 'firebase/firestore';
 import { auth, db } from '../Services/FirebaseAuth';
 
 export default function Home({ navigation }) {
@@ -19,58 +19,79 @@ export default function Home({ navigation }) {
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [currentUser, setCurrentUser] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
-  const [unreadCounts, setUnreadCounts] = useState({}); // Store unread message counts per user
+  const [unreadCounts, setUnreadCounts] = useState({});
+  const [username, setUsername] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    // Fetch users from Firestore
-    const fetchUsers = async () => {
-      try {
-        const querySnapshot = await getDocs(collection(db, 'users'));
-        const userList = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }));
-        setUsers(userList);
-      } catch (error) {
-        console.error('Error fetching users:', error);
-      }
-    };
-
-    const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
+    const unsubscribeAuth = onAuthStateChanged(auth, async (user) => {
       if (user) {
+        console.log('User authenticated:', user.uid);
         setCurrentUser(user);
+
+        // Fetch username
+        try {
+          const userDocRef = doc(db, 'users', user.uid);
+          const userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            console.log('User data fetched:', userDoc.data());
+            setUsername(userDoc.data().username);
+          } else {
+            console.error('User document not found in Firestore.');
+          }
+        } catch (error) {
+          console.error('Error fetching user data:', error);
+        }
       } else {
+        console.log('No user authenticated, redirecting to login.');
         setCurrentUser(null);
         navigation.navigate('login');
       }
+      setIsLoading(false);
     });
 
-    fetchUsers();
     return () => unsubscribeAuth();
   }, []);
 
   useEffect(() => {
+    if (!currentUser) return;
+
+    // Fetch all users
+    const unsubscribeUsers = onSnapshot(collection(db, 'users'), (snapshot) => {
+      const userList = snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      }));
+      console.log('Users fetched:', userList);
+      setUsers(userList);
+    });
+
+    return () => unsubscribeUsers();
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+
     // Listen for unread messages for the current user
-    if (currentUser) {
-      const q = query(
-        collection(db, 'messages'),
-        where('receiverId', '==', currentUser.uid),
-        where('isRead', '==', false)
-      );
+    const q = query(
+      collection(db, 'messages'),
+      where('receiverId', '==', currentUser.uid),
+      where('isRead', '==', false)
+    );
 
-      const unsubscribeMessages = onSnapshot(q, (snapshot) => {
-        const counts = {};
+    const unsubscribeMessages = onSnapshot(q, (snapshot) => {
+      const counts = {};
 
-        snapshot.forEach((doc) => {
-          const message = doc.data();
-          counts[message.senderId] = (counts[message.senderId] || 0) + 1;
-        });
-
-        setUnreadCounts(counts);
+      snapshot.forEach((doc) => {
+        const message = doc.data();
+        counts[message.senderId] = (counts[message.senderId] || 0) + 1;
       });
 
-      return () => unsubscribeMessages();
-    }
+      console.log('Unread counts updated:', counts);
+      setUnreadCounts(counts);
+    });
+
+    return () => unsubscribeMessages();
   }, [currentUser]);
 
   const handleSearch = (text) => {
@@ -97,8 +118,23 @@ export default function Home({ navigation }) {
       });
   };
 
+  if (isLoading) {
+    return (
+      <View style={styles.loaderContainer}>
+        <ActivityIndicator size="large" color="#0000ff" />
+        <Text>Loading...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
+      <View style={styles.userContainer}>
+        <Image source={require('../assets/profile.png')} style={styles.userImage} />
+        <Text style={styles.userText}>
+          {username ? `Welcome, ${username}` : 'Loading...'}
+        </Text>
+      </View>
       <TextInput
         style={styles.searchInput}
         placeholder="Search by username or phone number"
@@ -111,10 +147,7 @@ export default function Home({ navigation }) {
         renderItem={({ item }) => (
           <TouchableOpacity onPress={() => navigateToChat(item)}>
             <View style={styles.userContainer}>
-              <Image
-                source={require('../assets/profile.png')}
-                style={styles.userImage}
-              />
+              <Image source={require('../assets/profile.png')} style={styles.userImage} />
               <View style={styles.userInfo}>
                 <Text style={styles.userText}>{item.username}</Text>
                 {unreadCounts[item.id] > 0 && (
@@ -169,5 +202,10 @@ const styles = StyleSheet.create({
     color: 'red',
     fontSize: 14,
     marginTop: 4,
+  },
+  loaderContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
 });

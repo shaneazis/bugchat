@@ -9,6 +9,7 @@ import {
   Image,
   Modal,
   ActivityIndicator,
+  TouchableOpacity,
 } from 'react-native';
 import {
   collection,
@@ -148,35 +149,40 @@ export default function Chat({ route, navigation }) {
           const timestamp = item.timestamp ? item.timestamp.toDate() : new Date();
 
           return (
-            <View
-              style={[
-                styles.messageContainer,
-                isSender(item) ? styles.sentMessage : styles.receivedMessage,
-              ]}
+            <TouchableOpacity
+              onLongPress={() => handlePressMessage(item)}
+              activeOpacity={0.7}
             >
-              {item.type === 'text' ? (
-                <Text style={styles.messageText}>
-                  {item.content}{' '}
-                  {item.edited && <Text style={styles.editedLabel}>(edited)</Text>}
-                </Text>
-              ) : item.type === 'image' ? (
-                <Image source={{ uri: item.content }} style={styles.media} />
-              ) : item.type === 'video' ? (
-                <Video
-                  source={{ uri: item.content }}
-                  style={styles.media}
-                  useNativeControls
-                  resizeMode="contain"
-                />
-              ) : null}
+              <View
+                style={[
+                  styles.messageContainer,
+                  isSender(item) ? styles.sentMessage : styles.receivedMessage,
+                ]}
+              >
+                {item.type === 'text' ? (
+                  <Text style={styles.messageText}>
+                    {item.content}{' '}
+                    {item.edited && <Text style={styles.editedLabel}>(edited)</Text>}
+                  </Text>
+                ) : item.type === 'image' ? (
+                  <Image source={{ uri: item.content }} style={styles.media} />
+                ) : item.type === 'video' ? (
+                  <Video
+                    source={{ uri: item.content }}
+                    style={styles.media}
+                    useNativeControls
+                    resizeMode="contain"
+                  />
+                ) : null}
 
-              <Text style={styles.timestamp}>
-                {timestamp.toLocaleTimeString([], {
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </Text>
-            </View>
+                <Text style={styles.timestamp}>
+                  {timestamp.toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                  })}
+                </Text>
+              </View>
+            </TouchableOpacity>
           );
         }}
         onScrollBeginDrag={() => setUserScrolling(true)}
